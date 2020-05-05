@@ -1,0 +1,7 @@
+name = "ExprManipulation"
+uuid = "49bccec5-5f8e-4a37-813c-bb803a7e462a"
+authors = ["Dom <onetonfoot@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
