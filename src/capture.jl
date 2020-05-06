@@ -1,4 +1,11 @@
-struct Capture{N}
+import Base: ==
+
+abstract type AbstractCapture end
+
+(==)(capture::AbstractCapture, expr) = capture.fn(expr)
+(==)(expr, capture::AbstractCapture) = capture.fn(expr)
+
+struct Capture{N} <: AbstractCapture
     fn::Function
     val::Symbol
     n::Int
@@ -6,7 +13,7 @@ struct Capture{N}
     function Capture{N}(fn::Function, val::Symbol) where {N} 
 
         if !(N isa Integer) || N < 1
-            throw(ArgumentError("Capture{N}(...) N must be a integer greater than 0"))
+            throw(ArgumentError("Capture{N}(...) N must be a integer greater than 0 was given $N"))
         end
 
         function inner_fn(expr)
@@ -25,7 +32,7 @@ Capture{N}(val::Symbol) where N = Capture{N}(x->true, val)
 Base.show(io::IO, capture::Capture{1})  = print(io, "Capture(:", capture.val, ")")
 Base.show(io::IO, capture::Capture{N}) where N = print(io, "Capture", "{", Int(N), "}", "(:", capture.val, ")")
 
-struct SplatCapture
+struct SplatCapture <: AbstractCapture
     fn::Function
     val::Symbol
     SplatCapture(fn::Function, val::Symbol) = new(fn, val)

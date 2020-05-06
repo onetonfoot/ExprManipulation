@@ -1,8 +1,8 @@
-import Base: ==
+import Base: ==, match
 using Base.Meta: show_sexpr
 
 struct MExpr
-    head::Union{Symbol,Capture}
+    head::Union{Symbol,AbstractCapture,AbstractTransform}
     args::Array{Any}
 
     function MExpr(head::Union{Symbol,Capture}, args::Array)
@@ -18,7 +18,6 @@ end
 
 
 MExpr(head) = MExpr(head, [])
-# MExpr(head::{1}) = MExpr(head, [])
 MExpr(head, arg) = MExpr(head, [arg])
 # Is this guy needed?
 MExpr(head, arg, vargs...) = MExpr(head, [arg, vargs...])
@@ -38,126 +37,86 @@ function MExpr(expr::Expr)
     MExpr(expr.head, args)
 end
 
+poparg!(m_expr::MExpr, array::Array) = popfirst!(array) 
+poparg!(capture::Capture{N}, array::Array) where N =  length(array) < N ? nothing : [popfirst!(array) for i in 1:N]
+function poparg!(capture::SplatCapture, array::Array)
+    values = []
+    for i in 1:length(array)
+        push!(values, popfirst!(array))
+    end
+    values
+end
+
 (==)(match_expr::MExpr, expr::Expr) = (==)(expr, match_expr)
 (==)(match_expr::MExpr, x) = false
 (==)(x, match_expr::MExpr) = false
 
-# TODO rename
-function f(l::Array, i::Int, j::Int) 
-    if j <= length(l)
-        l[i:j]
-    else
-        nothing
-    end
-end
-
-# TODO (==) `(match::MExpr)(expr::Expr)` and transform all share roughtly the same logic
-# this could probaly be re-factored and cleaned up. I think it's basically a depth first search?
-# Would also be nice if it offered postwalk and prewalk like macro tools
-
 function (==)(expr::Expr, match_expr::MExpr) 
-    # TODO clean this function up its grim
-    if match_expr.head isa Symbol 
-        if expr.head != match_expr.head 
-            return false
-        end
-    else
-        if match_expr.head.fn(expr.head) != true
-            return false
-        end
-    end
 
-    m_idx = 1
-    e_idx = 1
-    total_n = 0
-    while e_idx <= length(expr.args) && m_idx <= length(match_expr.args)
-        match_arg = match_expr.args[m_idx]
-        arg = expr.args[e_idx]
-        if match_arg == :_
-            m_idx += 1
-            e_idx += 1
-            total_n += 1
-            continue
-        elseif match_arg isa Capture
-            n = match_arg.n
-            l = f(expr.args, e_idx, e_idx + n - 1)
-            if isnothing(l)
-                return false
-            end
-            result = match_arg.fn.(l)
-
-            if length(result) == n && all(result)
-                total_n += n
-                m_idx += 1
-                e_idx += n
-            else
-                return false
-            end
-        elseif match_arg isa SplatCapture
-            if match_arg.fn(expr.args[e_idx:end])
-                return true
-            else
-                return false
-            end
-        elseif match_arg == arg
-            m_idx += 1
-            e_idx += 1
-            total_n += 1
-        else 
-            return false
-        end
-    end
-
-    if total_n != length(expr.args)
+    if match_expr.head != expr.head
         return false
     end
 
-    return true
-end
+    total_n = 0
+    n_args = length(expr.args)
 
-function (match_expr::MExpr)(expr::Expr) 
+    expr = deepcopy(expr)
+    match_expr = deepcopy(match_expr)
 
-    @assert match_expr == expr "The $match_expr != $expr so can't be used to extract variables"
-    values = []
-
-    m_idx = 1
-    e_idx = 1
-
-    while e_idx <= length(expr.args) && m_idx <= length(match_expr.args)
-        match_arg = match_expr.args[m_idx]
-        arg = expr.args[e_idx]
+    # TODO add support for :_
+    while !isempty(expr.args) && !isempty(match_expr.args)
+        match_arg = popfirst!(match_expr.args)
+        match_arg = match_arg isa AbstractTransform ? match_arg.capture :  match_arg
         if match_arg isa Capture
-            n = match_arg.n
-            arg = if n == 1
-                push!(values, Dict(match_arg.val => arg))
-                e_idx += 1
-                m_idx += 1
+            args = poparg!(match_arg, expr.args)
+            if isnothing(args)
+                return false
+            elseif all(match_arg.fn.(args))
+                total_n += length(args)
             else
-                idx = e_idx:(e_idx + n - 1)
-                @show expr.args[idx]
-                push!(values, Dict(match_arg.val => expr.args[idx]))
-                e_idx += n
-                m_idx += 1
+                return false
             end
         elseif match_arg isa SplatCapture
-            push!(values, Dict(match_arg.val => expr.args[e_idx:end]))
-            break
-        elseif match_arg isa MExpr
-            push!(values, match_arg(arg))
-            m_idx += 1
-            e_idx += 1
+            arg = poparg!(match_arg, expr.args)
+            if match_arg != arg
+                return false
+            end
+            total_n += length(arg)
+        elseif match_arg == popfirst!(expr.args)
+            total_n += 1
         else
-            m_idx += 1
-            e_idx += 1
+            return false
         end
     end
-
-    @show values
-    filter!(!isnothing, values)
-    merge(values...)
+    total_n == n_args
 end
 
+Base.match(capture::Capture{1}, expr::Array) = Dict(capture.val => expr[1])
+Base.match(capture::Capture{N}, expr::Array) where N = Dict(capture.val => expr)
+Base.match(capture::SplatCapture, expr::Array) = Dict(capture.val => expr)
+Base.match(transform::AbstractTransform, expr) = match(transform.capture, expr)
 
+function Base.match(match_expr::MExpr, expr::Expr) 
+
+    if match_expr != expr
+        return nothing
+    end
+    values = []
+    # don't think this has to be a deepcopy just a copy but need to define copy for MExpr
+    expr = deepcopy(expr)
+    match_expr = deepcopy(match_expr)
+
+    while !isempty(expr.args) && !isempty(match_expr.args)
+        match_arg = popfirst!(match_expr.args)
+        if match_arg isa Union{AbstractCapture,AbstractTransform,MExpr}
+            result = match(match_arg, poparg!(match_arg, expr.args))
+            push!(values, result)
+        else
+            popfirst!(expr.args)
+        end
+    end
+    return merge(values...)
+end
 
 function create_expr(match_expr::MExpr, replace_capture)
     head = match_expr.head
