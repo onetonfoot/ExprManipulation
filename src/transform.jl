@@ -7,12 +7,14 @@ abstract type AbstractTransform end
 
 struct Transform <: AbstractTransform
     fn::Function
-    capture::Union{Capture,SplatCapture}
+    capture::Union{AbstractCapture,Nothing}
 end
 
 Transform(fn::Function, key::Symbol) = Transform(fn, Capture(key))
+Transform(fn::Function) = Transform(fn, nothing)
+(transform::Transform)(capture::AbstractCapture) = Transform(transform.fn, capture)
 
 struct STransform <: AbstractTransform
     fn::Function
-    capture::Union{Capture,SplatCapture}
+    capture::Union{AbstractCapture,Nothing}
 end

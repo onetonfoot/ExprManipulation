@@ -11,9 +11,7 @@ using Base.Meta: show_sexpr
     @test_throws ArgumentError MExpr(:call, SplatCapture(:y), Capture(:x))
 end
 
-# TODO: should probably refactor so tests for Equality and Match are Seperate
 @testset "Equality" begin
-
     @testset "infix_match" begin
         infix_match = MExpr(:call, Capture(:op), Capture(:lexpr), Capture(:rexpr))
         expr1 = :(x + 10) 
@@ -47,8 +45,8 @@ end
         @test Expr(:call) == match_expr
 
     end
-    @testset "Capture{N}" begin
 
+    @testset "Capture{N}" begin
         expr = :((*)(1, 2, 3, 4)) 
         @test expr == MExpr(:call, :*, Capture{4}(:x))
         @test expr != MExpr(:call, :*, Capture{2}(:x))
@@ -71,7 +69,6 @@ end
 
         string_expr = :((*)("1", "2", "3"))
         number_expr = :((*)(1, 2, 3))
-
         @test MExpr(:call, :*, splat_capture) == string_expr
         @test MExpr(:call, :*, splat_capture) != number_expr
     end
@@ -117,7 +114,6 @@ end
         number_expr = :((*)(1, 2, 3))
         string_expr = :((*)("1", "2", "3"))
         m_expr = MExpr(:call, :*, SplatCapture(x->all(isnumber.(x)), :numbers))
-
         @test match(m_expr, number_expr)[:numbers] == [1,2,3]
         @test match(m_expr, string_expr) == nothing
     end

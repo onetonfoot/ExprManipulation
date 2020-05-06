@@ -4,7 +4,7 @@ ExprManipulation proves tools to match and transform expression.
 
 ## Motivation
 
-Often expr manipulation code ends up
+Often expr manipulation code ends up hard to read and maintain
 
 with the pyramid of doom.
 

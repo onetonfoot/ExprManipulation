@@ -5,7 +5,7 @@ struct MExpr
     head::Union{Symbol,AbstractCapture,AbstractTransform}
     args::Array{Any}
 
-    function MExpr(head::Union{Symbol,Capture}, args::Array)
+    function MExpr(head::Union{Symbol,AbstractCapture,AbstractTransform}, args::Array)
         seen_capture = false
         for (idx, arg) in enumerate(args)
             if arg isa SplatCapture && idx != length(args)
@@ -16,26 +16,10 @@ struct MExpr
     end
 end
 
-
 MExpr(head) = MExpr(head, [])
 MExpr(head, arg) = MExpr(head, [arg])
-# Is this guy needed?
 MExpr(head, arg, vargs...) = MExpr(head, [arg, vargs...])
-
 match_capture = MExpr(:call, :Capture, :_)
-
-function MExpr(expr::Expr) 
-    args = map(expr.args) do arg
-        if arg == match_capture
-            eval(arg)
-        elseif arg isa Expr
-            MExpr(arg)
-        else
-            arg
-        end
-    end
-    MExpr(expr.head, args)
-end
 
 poparg!(m_expr::MExpr, array::Array) = popfirst!(array) 
 poparg!(capture::Capture{N}, array::Array) where N =  length(array) < N ? nothing : [popfirst!(array) for i in 1:N]
@@ -59,7 +43,6 @@ function (==)(expr::Expr, match_expr::MExpr)
 
     total_n = 0
     n_args = length(expr.args)
-
     expr = deepcopy(expr)
     match_expr = deepcopy(match_expr)
 
@@ -67,6 +50,10 @@ function (==)(expr::Expr, match_expr::MExpr)
     while !isempty(expr.args) && !isempty(match_expr.args)
         match_arg = popfirst!(match_expr.args)
         match_arg = match_arg isa AbstractTransform ? match_arg.capture :  match_arg
+        if isnothing(match_arg)
+            # TODO better error message
+            error("Transform has no associated capture so can't be used yet")
+        end
         if match_arg isa Capture
             args = poparg!(match_arg, expr.args)
             if isnothing(args)
@@ -98,10 +85,16 @@ Base.match(transform::AbstractTransform, expr) = match(transform.capture, expr)
 
 function Base.match(match_expr::MExpr, expr::Expr) 
 
+    values = []
+
     if match_expr != expr
         return nothing
     end
-    values = []
+
+    if match_expr.head isa Union{AbstractCapture,AbstractTransform}
+        push!(values, match(match_expr.head, [expr.head]))
+    end
+        
     # don't think this has to be a deepcopy just a copy but need to define copy for MExpr
     expr = deepcopy(expr)
     match_expr = deepcopy(match_expr)
@@ -109,6 +102,7 @@ function Base.match(match_expr::MExpr, expr::Expr)
     while !isempty(expr.args) && !isempty(match_expr.args)
         match_arg = popfirst!(match_expr.args)
         if match_arg isa Union{AbstractCapture,AbstractTransform,MExpr}
+            match_arg = match_arg isa AbstractTransform ? match_arg.capture :  match_arg
             result = match(match_arg, poparg!(match_arg, expr.args))
             push!(values, result)
         else
@@ -116,6 +110,38 @@ function Base.match(match_expr::MExpr, expr::Expr)
         end
     end
     return merge(values...)
+end
+
+function transform(m_expr::MExpr, expr::Expr)
+
+    # don't think this has to be a deepcopy just a copy but need to define copy for structs in package first
+    expr = deepcopy(expr)
+    m_expr = deepcopy(m_expr)
+
+    @assert m_expr == expr "MExpr != Expr so transformation can't be applied"
+    head = m_expr.head isa AbstractTransform ? m_expr.head.fn(expr.head) : expr.head
+    args = []
+
+    while !isempty(expr.args) && !isempty(m_expr.args)
+        match_arg = popfirst!(m_expr.args)
+        if match_arg isa Transform
+            arg = poparg!(match_arg.capture, expr.args)
+            push!(args, match_arg.fn.(arg)...)
+        elseif match_arg isa STransform
+            result = match(match_arg, poparg!(match_arg, expr.args))
+            push!(args, result...)
+        elseif match_arg isa AbstractCapture
+            arg = poparg!(match_arg, expr.args)
+            push!(args, arg...)
+        elseif match_arg isa MExpr
+            arg = transform(match_arg, popfirst!(expr.args))
+            push!(args, arg)
+        else
+            push!(args, popfirst!(expr.args))
+        end
+    end
+    # TODO support SplatTransform for head
+    Expr(head, args...)
 end
 
 function create_expr(match_expr::MExpr, replace_capture)
