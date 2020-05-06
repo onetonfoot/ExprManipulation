@@ -13,6 +13,8 @@ using Test
     @test SplatCapture(:x) do expr
         expr == :(x + 1)
     end isa SplatCapture
+
+    
 end
 
 

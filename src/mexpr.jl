@@ -2,10 +2,10 @@ import Base: ==
 using Base.Meta: show_sexpr
 
 struct MExpr
-    head::Symbol
+    head::Union{Symbol,Capture}
     args::Array{Any}
 
-    function MExpr(head::Symbol, args::Array)
+    function MExpr(head::Union{Symbol,Capture}, args::Array)
         seen_capture = false
         for (idx, arg) in enumerate(args)
             if arg isa SplatCapture && idx != length(args)
@@ -17,8 +17,10 @@ struct MExpr
 end
 
 
-MExpr(head::Symbol) = MExpr(head, [])
+MExpr(head) = MExpr(head, [])
+# MExpr(head::{1}) = MExpr(head, [])
 MExpr(head, arg) = MExpr(head, [arg])
+# Is this guy needed?
 MExpr(head, arg, vargs...) = MExpr(head, [arg, vargs...])
 
 match_capture = MExpr(:call, :Capture, :_)
@@ -36,6 +38,11 @@ function MExpr(expr::Expr)
     MExpr(expr.head, args)
 end
 
+(==)(match_expr::MExpr, expr::Expr) = (==)(expr, match_expr)
+(==)(match_expr::MExpr, x) = false
+(==)(x, match_expr::MExpr) = false
+
+# TODO rename
 function f(l::Array, i::Int, j::Int) 
     if j <= length(l)
         l[i:j]
@@ -44,11 +51,20 @@ function f(l::Array, i::Int, j::Int)
     end
 end
 
+# TODO (==) `(match::MExpr)(expr::Expr)` and transform all share roughtly the same logic
+# this could probaly be re-factored and cleaned up. I think it's basically a depth first search?
+# Would also be nice if it offered postwalk and prewalk like macro tools
 
-# TODO add support for matching Capture for head
 function (==)(expr::Expr, match_expr::MExpr) 
-    if expr.head != match_expr.head 
-        return false
+    # TODO clean this function up its grim
+    if match_expr.head isa Symbol 
+        if expr.head != match_expr.head 
+            return false
+        end
+    else
+        if match_expr.head.fn(expr.head) != true
+            return false
+        end
     end
 
     m_idx = 1
@@ -78,7 +94,11 @@ function (==)(expr::Expr, match_expr::MExpr)
                 return false
             end
         elseif match_arg isa SplatCapture
-            return true
+            if match_arg.fn(expr.args[e_idx:end])
+                return true
+            else
+                return false
+            end
         elseif match_arg == arg
             m_idx += 1
             e_idx += 1
@@ -95,28 +115,53 @@ function (==)(expr::Expr, match_expr::MExpr)
     return true
 end
 
-(==)(match_expr::MExpr, expr::Expr) = (==)(expr, match_expr)
-(==)(match_expr::MExpr, x) = false
-(==)(x, match_expr::MExpr) = false
-
 function (match_expr::MExpr)(expr::Expr) 
+
     @assert match_expr == expr "The $match_expr != $expr so can't be used to extract variables"
     values = []
 
-    foreach(zip(expr.args, match_expr.args)) do (arg, match_arg) 
+    m_idx = 1
+    e_idx = 1
+
+    while e_idx <= length(expr.args) && m_idx <= length(match_expr.args)
+        match_arg = match_expr.args[m_idx]
+        arg = expr.args[e_idx]
         if match_arg isa Capture
-            push!(values, Dict(match_arg.val => arg))
+            n = match_arg.n
+            arg = if n == 1
+                push!(values, Dict(match_arg.val => arg))
+                e_idx += 1
+                m_idx += 1
+            else
+                idx = e_idx:(e_idx + n - 1)
+                @show expr.args[idx]
+                push!(values, Dict(match_arg.val => expr.args[idx]))
+                e_idx += n
+                m_idx += 1
+            end
+        elseif match_arg isa SplatCapture
+            push!(values, Dict(match_arg.val => expr.args[e_idx:end]))
+            break
         elseif match_arg isa MExpr
             push!(values, match_arg(arg))
+            m_idx += 1
+            e_idx += 1
+        else
+            m_idx += 1
+            e_idx += 1
         end
     end
+
+    @show values
     filter!(!isnothing, values)
-    # TODO should warn if duplicate keys exist!
     merge(values...)
 end
 
+
+
 function create_expr(match_expr::MExpr, replace_capture)
-    expr =  Expr(match_expr.head)
+    head = match_expr.head
+    expr =  Expr(head isa Symbol ? head : :_)
     for arg in match_expr.args
         arg = if arg isa Capture && replace_capture
             :_

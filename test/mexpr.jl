@@ -5,6 +5,7 @@ using Base.Meta: show_sexpr
 
 
 
+
 @testset "Constructor" begin
 
     MExpr(:call)
@@ -23,7 +24,7 @@ end
 
         expr1 = :(x + 10) 
 
-        show_sexpr(expr1)
+        # show_sexpr(expr1)
 
         @test infix_match == expr1
         matches1 = infix_match(expr1)
@@ -59,6 +60,12 @@ end
         @test type_match(:(::Type{T <: Real}))[:t_expr] == :(T <: Real)
     end
 
+    @testset "head_match" begin
+        match_expr = MExpr(Capture(:head))
+        @test Expr(:call) == match_expr
+
+    end
+
     @testset "Capture{N}" begin
 
         expr = :((*)(1, 2, 3, 4)) 
@@ -69,6 +76,13 @@ end
         @test expr == MExpr(:call, :*, Capture{1}(:x), Capture{3}(:y))
         @test expr != MExpr(:call, :*, Capture{1}(:x), Capture{5}(:y))
         @test expr != MExpr(:call, :*, Capture{1}(:x), Capture{1}(:y))
+
+
+        result = MExpr(:call, :*, Capture{2}(:x), Capture{2}(:y))(expr)
+        @test result[:x] == [1,2]
+        @test result[:y] == [3,4]
+
+
     end
 
     @testset "SplatCapture" begin
@@ -76,6 +90,21 @@ end
         @test expr == MExpr(:call, SplatCapture(:x))
         @test expr == MExpr(:call, :+, Capture(:a), SplatCapture(:b))
         @test expr != MExpr(:call, :+, Capture{5}(:a), SplatCapture(:b))
+
+        result = MExpr(:call, Capture(:fn), SplatCapture(:args))(expr)
+        @test result[:fn] == :+
+        @test result[:args] == [1,2,3,4]
+
+
+        splat_capture = SplatCapture(:args) do args
+            all(map(x->x isa String, args))
+        end
+
+        string_expr = :((*)("1", "2", "3"))
+        number_expr = :((*)(1, 2, 3))
+
+        @test MExpr(:call, :*, splat_capture) == string_expr
+        @test MExpr(:call, :*, splat_capture) != number_expr
     end
 end
 

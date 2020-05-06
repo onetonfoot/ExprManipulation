@@ -32,7 +32,3 @@ struct SplatCapture
 end
 
 SplatCapture(val::Symbol) = SplatCapture(x->true, val)
-
-# Capture exactly N fields
-# Capture less than number of field
-# Capture 

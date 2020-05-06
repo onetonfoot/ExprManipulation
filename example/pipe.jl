@@ -2,19 +2,49 @@ using ExprManipulation
 using Base.Meta: show_sexpr
 
 
+input_expr = :(x |> f |> f(_, _))
+target_expr = :(x |> x->f(x) |> x->f(x, x))
+
+input_fn_expr = :(f(_, _))
+target_fn_expr = :(x->f(x, x))
+
+splat_pipe = SplatCapture(:pipe) do args
+    fn = args[1] 
+    fn == :|> || fn == :.|>
+end
+match_pipe = MExpr(:call, splat_pipe)
+
+splat_underscores = SplatCapture(:underscore) do args
+    any(args .== :_)
+end
+
+match_underscores = MExpr(Capture(:call), splat_underscores)
+
+output_expr = transform(match_pipe, input_expr) do key, expr
+    @show expr
+    expr
+end;
 
 
-x = 10
-f(x) = x^2
-g(x,y) = x + y
+
+transform_fn(key, expr) = transform_fn(Val(key), expr)
+transform_fn(key::Symbol, expr) = transform_fn(Val(key), expr)
+transform_fn(key::Val{:call}, expr) = :->
+
+show_sexpr(input_fn_expr)
+show_sexpr(target_fn_expr)
 
 
-match_pipe = MExpr(:call, Capture(x->x == :|> || x == :.|>, :pipe), Capture(:args))
+function transform_fn(key::Val{:underscore}, expr) 
+    expr[1], :3
+end
 
 
-expr = :(x |> f |> f(_, _))
-show_sexpr(expr)
+transform(transform_fn, match_underscores, input_fn_expr)
 
+target_expr
+
+match_underscores
 
 
 @testset "Scalars" begin
