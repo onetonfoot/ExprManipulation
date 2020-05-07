@@ -4,6 +4,6 @@ include("capture.jl")
 include("transform.jl")
 include("mexpr.jl")
 
-export MExpr, Capture, SplatCapture, Transform, STransform, match, transform
+export MExpr, Capture, Slurp, match
 
 end # module

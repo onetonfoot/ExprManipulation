@@ -15,20 +15,14 @@ struct MExpr{K}
             end
         end
         if n_slurps > 1
-            error("Only one slurp allow per an expression")
+            throw(ArgumentError("Only one Slurp allow per an expression found $n_slurps"))
         end
         new{head}(head, args)
     end
 end
 
 MExpr(head::Symbol)  =  MExpr(head, [])
-MExpr(head, args...) where {K} = MExpr(head, collect(args))
-
-(==)(match_expr::MExpr, expr::Expr) = (==)(expr, match_expr)
-(==)(match_expr::MExpr, x) = false
-
-Base.match(capture::Capture, arg) = capture.fn(arg) ? Dict(capture.key => arg) : nothing
-# Base.match(capture::SplatCapture, args::Array) = capture.fn(args) ? Dict(capture.val => args) : nothing
+MExpr(head, args...) = MExpr(head, collect(args))
 
 
 haschildren(expr::Union{Expr,MExpr}) = !isempty(expr.args)
@@ -36,119 +30,143 @@ haschildren(x) = false
 children(expr::Union{Expr,MExpr}) = expr.args
 children(x) = []
 
+# TODO enable debug logging
+function getcaptures(m_expr, expr)
 
-# https://stackoverflow.com/questions/55606017/postorder-traversal-of-an-n-ary-tree
-# https://www.geeksforgeeks.org/iterative-postorder-traversal-of-n-ary-tree/?ref=leftbar-rightbar
-function postorder(root::MExpr)
-    stack = Any[root]
-    last_child =  nothing
+    matched = fill(false, length(expr.args) + 1)
+    matched[1]  = m_expr.head == expr.head
 
-    while !isempty(stack)
-        root = stack[end]
-        # node has no child, or one child has been visted, the process and pop it
-        if !haschildren(root) || (!isnothing(last_child) &&  last_child in children(root))
-            println(root)
-            pop!(stack)
-            last_child = root
+    e_i = 1
+    m_i = 1
+    has_slurp = false
+    matches = []
+    m_children = []
+    e_children = []
+
+    while length(expr.args) >= e_i && length(m_expr.args) >= m_i
+        arg = expr.args[e_i]
+        m_arg = m_expr.args[m_i]
+        if m_arg isa Slurp
+            has_slurp = true
+            # Find number of captures left
+            n = length(m_expr.args[(e_i + 1):end])
+            n_ele = length(expr.args[e_i:end])
+            # Get Slurp Index
+            j = e_i + n_ele - n - 1
+            args = expr.args[e_i:j]
+            bool = m_arg.fn(args)
+            matched[(e_i + 1):(j + 1)] .= bool
+            if bool
+                push!(matches, m_arg.key => args)
+            end
+            e_i += length(e_i:j)
+            m_i += 1
+        elseif m_arg isa Capture
+            bool = m_arg == arg
+            matched[e_i + 1] = bool
+            if bool
+                push!(matches, m_arg.key => arg)
+            end
+            e_i += 1
+            m_i += 1
+        elseif m_arg isa MExpr
+            bool = if arg isa Expr
+                push!(m_children, m_arg)
+                push!(e_children, arg)
+                true
+            else
+                false
+            end
+            matched[e_i + 1] = bool
+            e_i += 1
+            m_i += 1
         else
-            append!(stack, reverse(root.args))
+            matched[e_i + 1] = arg == m_arg
+            e_i += 1
+            m_i += 1
         end
     end
+
+    all_matched = all(matched)
+    # TO FEW CAPTURES
+    if length(m_expr.args) < length(expr.args) && !has_slurp 
+        all_matched = false
+    # TO MANY CAPTURES
+    elseif length(m_expr.args) > length(expr.args)
+        all_matched = false
+    end
+
+    (matches, (m_children, e_children), all_matched)
+end
+
+function Base.match(m_expr::MExpr, expr::Expr)
+    que = Any[(m_expr, expr)]
+    last_child =  nothing
+    values = []
+    while !isempty(que)
+        root = pop!(que)
+        m_expr, expr = root
+        (matches, children, all_matched) = getcaptures(m_expr, expr)
+        append!(values, matches)
+        if !all_matched
+            return nothing
+        end
+
+        (m_children, e_children) = children
+        for (m_child, child) in zip(m_children, e_children)
+            push!(que,  (m_child, child))
+        end
+    end
+    return Dict(values...)
 end
 
 function preorder(root::MExpr)
-    stack = Any[root]
+    que = Any[root]
     last_child =  nothing
 
-    while !isempty(stack)
-        root = pop!(stack)
-        println(root)
+    while !isempty(que)
+        root = pop!(que)
         # node has no child, or one child has been visted, the process and pop it
         if !haschildren(root) || (!isnothing(last_child) &&  last_child in children(root))
             # LOGIC HERE
             last_child = root
         else
-            append!(stack, reverse(root.args))
+            append!(que, reverse(root.args))
         end
     end
 end
 
-function Base.match(match_expr::MExpr, expr::Expr) 
+# function transform(m_expr::MExpr, expr::Expr)
 
-    values = []
+#     # don't think this has to be a deepcopy just a copy but need to define copy for structs in package first
+#     expr = deepcopy(expr)
+#     m_expr = deepcopy(m_expr)
 
-    if match_expr.head != expr.head
-        return nothing
-    end
+#     @assert m_expr == expr "MExpr != Expr so transformation can't be applied"
+#     head = m_expr.head isa AbstractTransform ? m_expr.head.fn(expr.head) : expr.head
+#     args = []
 
-    total = 0
-
-    e_idx = 1
-    m_idx = 1
-
-    while m_idx <= length(match_expr.args) && e_idx <= length(expr.args)
-        arg = expr.args[e_idx]
-        m_arg = match_expr.args[m_idx]
-        @show m_arg
-        @show arg
-        if m_arg isa Capture
-            matches = match(m_arg, arg)
-            if isnothing(matches)
-                return nothing
-            end
-            push!(values, matches)
-        # TODO add elseif for slurp
-        # elseif m_arg isa Slurp
-        #     #
-        #     # length(expr.args) - total
-        #     args = []
-        #     s_idx = e_idx
-        #     # while 
-
-        end
-        total += 1
-        m_idx += 1
-        e_idx += 1
-    end
-
-    if total != length(expr.args)
-        nothing
-    else
-        merge(values...)
-    end
-end
-
-function transform(m_expr::MExpr, expr::Expr)
-
-    # don't think this has to be a deepcopy just a copy but need to define copy for structs in package first
-    expr = deepcopy(expr)
-    m_expr = deepcopy(m_expr)
-
-    @assert m_expr == expr "MExpr != Expr so transformation can't be applied"
-    head = m_expr.head isa AbstractTransform ? m_expr.head.fn(expr.head) : expr.head
-    args = []
-
-    while !isempty(expr.args) && !isempty(m_expr.args)
-        match_arg = popfirst!(m_expr.args)
-        if match_arg isa Transform
-            arg = poparg!(match_arg.capture, expr.args)
-            push!(args, match_arg.fn.(arg)...)
-        elseif match_arg isa STransform
-            result = match(match_arg, poparg!(match_arg, expr.args))
-            push!(args, result...)
-        elseif match_arg isa AbstractCapture
-            arg = poparg!(match_arg, expr.args)
-            push!(args, arg...)
-        elseif match_arg isa MExpr
-            arg = transform(match_arg, popfirst!(expr.args))
-            push!(args, arg)
-        else
-            push!(args, popfirst!(expr.args))
-        end
-    end
-    # TODO support SplatTransform for head
-    Expr(head, args...)
-end
+#     while !isempty(expr.args) && !isempty(m_expr.args)
+#         match_arg = popfirst!(m_expr.args)
+#         if match_arg isa Transform
+#             arg = poparg!(match_arg.capture, expr.args)
+#             push!(args, match_arg.fn.(arg)...)
+#         elseif match_arg isa STransform
+#             result = match(match_arg, poparg!(match_arg, expr.args))
+#             push!(args, result...)
+#         elseif match_arg isa AbstractCapture
+#             arg = poparg!(match_arg, expr.args)
+#             push!(args, arg...)
+#         elseif match_arg isa MExpr
+#             arg = transform(match_arg, popfirst!(expr.args))
+#             push!(args, arg)
+#         else
+#             push!(args, popfirst!(expr.args))
+#         end
+#     end
+#     # TODO support SplatTransform for head
+#     Expr(head, args...)
+# end
 
 
 # function create_expr(match_expr::MExpr, replace_capture)

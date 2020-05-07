@@ -1,20 +1,20 @@
-import Base: ==
+# import Base: ==
 
-abstract type AbstractTransform end
+# # https://stackoverflow.com/questions/55606017/postorder-traversal-of-an-n-ary-tree
+# # https://www.geeksforgeeks.org/iterative-postorder-traversal-of-n-ary-tree/?ref=leftbar-rightbar
+# function postorder(root::MExpr)
+#     stack = Any[root]
+#     last_child =  nothing
 
-(==)(transfrom::AbstractTransform, expr) = transfrom.capture == expr
-(==)(expr , transfrom::AbstractTransform) = transfrom.capture == expr
-
-struct Transform <: AbstractTransform
-    fn::Function
-    capture::Union{AbstractCapture,Nothing}
-end
-
-Transform(fn::Function, key::Symbol) = Transform(fn, Capture(key))
-Transform(fn::Function) = Transform(fn, nothing)
-(transform::Transform)(capture::AbstractCapture) = Transform(transform.fn, capture)
-
-struct STransform <: AbstractTransform
-    fn::Function
-    capture::Union{AbstractCapture,Nothing}
-end
+#     while !isempty(stack)
+#         root = stack[end]
+#         # node has no child, or one child has been visted, the process and pop it
+#         if !haschildren(root) || (!isnothing(last_child) &&  last_child in children(root))
+#             println(root)
+#             pop!(stack)
+#             last_child = root
+#         else
+#             append!(stack, reverse(root.args))
+#         end
+#     end
+# end

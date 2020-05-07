@@ -1,132 +1,112 @@
-using ExprManipulation: MExpr, Capture, SplatCapture
+using ExprManipulation: MExpr, Capture, Slurp, getcaptures
 using Test
 using Base.Meta: show_sexpr
 
 @testset "Constructor" begin
-    # TODO make sure head can only be Capture{1} or Symbol or Transform(Capture{1})
-    MExpr(:call)
-    MExpr(:call, Capture{2}(:x))
-    MExpr(:call, SplatCapture(:x))
-    MExpr(:call, Capture(:x), SplatCapture(:y))
-    @test_throws ArgumentError MExpr(:call, SplatCapture(:y), Capture(:x))
+    @test_nowarn MExpr(:call)
+    @test_nowarn MExpr(:call, Capture(:x))
+    @test_throws ArgumentError MExpr(:call, Slurp(:x), Slurp(:y))
 end
 
-@testset "Equality" begin
-    @testset "infix_match" begin
-        infix_match = MExpr(:call, Capture(:op), Capture(:lexpr), Capture(:rexpr))
-        expr1 = :(x + 10) 
-        expr2 = :(x .~ Normal(μ, σ))
-        @test infix_match == expr2
-        @test infix_match == expr1
-    end
+@testset "getcaptures" begin
+    # NORMAL ARGS
+    expr = :([1,2,3,4])
+    m_expr = MExpr(:vect, 1, 2, 3, 4)
+    (matches, children, all_matched) = getcaptures(m_expr, expr)
+    @test all_matched
 
-    @testset "tilde_match" begin
-        istilde = x->x == :.~ || x == :~
-        tilde_match = MExpr(:call, 
-            Capture(istilde,  :op), 
-            Capture(:lexpr), 
-            Capture(:rexpr)
-        )
+    # TOO MANY CAPUTES
+    expr = :([1])
+    m_expr = MExpr(:vect, Capture(:x), Capture(:y))
+    (matches, children, all_matched) = getcaptures(m_expr, expr)
+    @test !all_matched
 
-        @test tilde_match == :(x  ~ Normal(μ, 1))
-        @test tilde_match == :(x  .~ Normal(μ, 1))
-        @test tilde_match == :(x[:,1]  .~ Normal(μ, 1))
-        @test tilde_match != :(x  + Normal(μ, 1))
-    end
+    # TOO FEW CAPUTES
+    expr = :([1,2,3])
+    m_expr = MExpr(:vect, Capture(:x), Capture(:y))
+    (matches, children, all_matched) = getcaptures(m_expr, expr)
+    @test !all_matched
 
-    @testset "type_match" begin
-        type_match = MExpr(:(::), MExpr(:curly, :Type, Capture(:t_expr)))
-        @test type_match == :(::Type{T})
-        @test type_match == :(::Type{T <: Real})
-    end
+    # SLURP START
+    expr = :([1,2,3,4])
+    m_expr = MExpr(:vect, Slurp(:elements))
+    (matches, children, all_matched) = getcaptures(m_expr, expr)
+    @test all_matched
 
-    @testset "head_match" begin
-        match_expr = MExpr(Capture(:head))
-        @test Expr(:call) == match_expr
+    # SLURP END
+    expr = :([1,2,3,4])
+    m_expr = MExpr(:vect, Capture(:x), Slurp(:elements))
+    (matches, children, all_matched) = getcaptures(m_expr, expr)
+    @test all_matched 
 
-    end
+    # SLURP MIDDLE
+    expr = :([1,2,3,4])
+    m_expr = MExpr(:vect, Capture(:x), Slurp(:elements), Capture(:y))
+    (matched, children, all_matched) = getcaptures(m_expr, expr)
+    @test all_matched
 
-    @testset "Capture{N}" begin
-        expr = :((*)(1, 2, 3, 4)) 
-        @test expr == MExpr(:call, :*, Capture{4}(:x))
-        @test expr != MExpr(:call, :*, Capture{2}(:x))
-        @test expr != MExpr(:call, :*, Capture{5}(:x))
-        @test expr == MExpr(:call, :*, Capture{2}(:x), Capture{2}(:y))
-        @test expr == MExpr(:call, :*, Capture{1}(:x), Capture{3}(:y))
-        @test expr != MExpr(:call, :*, Capture{1}(:x), Capture{5}(:y))
-        @test expr != MExpr(:call, :*, Capture{1}(:x), Capture{1}(:y))
-    end
+    # NESTED
+    expr = :((x + 1)^2)
+    m_expr = MExpr(:call, :^, MExpr(:call, :+, Slurp(:args)), Capture(:power_n))
+    (matched, (m_children, e_children), all_matched) =  getcaptures(m_expr, expr)
+    @test length(m_children) == length(e_children)
 
-    @testset "SplatCapture" begin
-        expr = :((+)(1, 2, 3, 4)) 
-        @test expr == MExpr(:call, SplatCapture(:x))
-        @test expr == MExpr(:call, :+, Capture(:a), SplatCapture(:b))
-        @test expr != MExpr(:call, :+, Capture{5}(:a), SplatCapture(:b))
-
-        splat_capture = SplatCapture(:args) do args
-            all(map(x->x isa String, args))
-        end
-
-        string_expr = :((*)("1", "2", "3"))
-        number_expr = :((*)(1, 2, 3))
-        @test MExpr(:call, :*, splat_capture) == string_expr
-        @test MExpr(:call, :*, splat_capture) != number_expr
-    end
-
-    @testset "heavily nested" begin
-        expr = :( (x^3 + 10)  / 2)
-        show_sexpr(expr)
-        m_expr = MExpr(:call, :/, MExpr(:call, :+, MExpr(:call, Capture(:power), :x, 3), 10), 2)
-        m_expr == expr
-    end
 end
-
 
 @testset "Match" begin
-
-
     @testset "infix_match" begin
         infix_match = MExpr(:call, Capture(:op), Capture(:lexpr), Capture(:rexpr))
         expr1 = :(x + 10) 
+        matches = match(infix_match, expr1)
+        matches[:op] == :+
+        matches[:lexpr] == :x
+        matches[:rexpr] == 10
+
         expr2 = :(x .~ Normal(μ, σ))
-
-        matches1 = match(infix_match, expr1)
-        @test matches1[:lexpr] == :x
-        @test matches1[:op] == :+
-        @test matches1[:rexpr] == 10
-
         matches2 = match(infix_match, expr2)
         @test matches2[:lexpr] == :x
         @test matches2[:op] == :.~
         @test matches2[:rexpr] == :(Normal(μ, σ))
     end
 
-    @testset "heavily nested" begin
+    @testset "nested" begin
         expr = :( (x^3 + 10)  / 2)
-        m_expr = MExpr(:call, :/, MExpr(:call, :+, MExpr(:call, Capture(:op), :x, Capture(:n)), 10), 2)
-        result = match(m_expr, expr)
-        @test result[:op] == :^
-        @test result[:n] == 3
+        m_expr = MExpr(:call, :/, MExpr(:call, Capture(:plus), MExpr(:call, Capture(:power), :x, 3), 10), 2)
+        matches = match(m_expr, expr)
+        matches[:power] == :^
+        matches[:plus] == :+
     end
 
-    @testset "SplatCapture" begin
+    @testset "Slurp" begin
+        expr = :((*)(1, 2, 3, 4)) 
+        m_expr =  MExpr(:call, :*, Capture(:x))
+        match(m_expr, expr) == nothing
+
+        m_expr =  MExpr(:call, :*, Slurp(:args))
+        match(m_expr, expr)[:args] == [1,2,3,4]
+
+        m_expr =  MExpr(:call, :*, Capture(:start), Slurp(:args))
+        matches = match(m_expr, expr)
+        matches[:args] == [2,3,4]
+        matches[:start] == 1
+
+        m_expr =  MExpr(:call, :*, Slurp(:args), Capture(:end))
+        matches = match(m_expr, expr)
+        matches[:args] == [1,2,3]
+        matches[:end] == 4
+
+        m_expr =  MExpr(:call, :*, Capture(:start), Slurp(:args), Capture(:end))
+        matches = match(m_expr, expr)
+        matches[:start] == 1
+        matches[:args] == [2,3]
+        matches[:end] == 4
+
         isnumber = x->x isa Number
         number_expr = :((*)(1, 2, 3))
         string_expr = :((*)("1", "2", "3"))
-        m_expr = MExpr(:call, :*, SplatCapture(x->all(isnumber.(x)), :numbers))
+        m_expr = MExpr(:call, :*, Slurp(x->all(isnumber.(x)), :numbers))
         @test match(m_expr, number_expr)[:numbers] == [1,2,3]
         @test match(m_expr, string_expr) == nothing
     end
 end
 
-# TODO play around with Normal Expr Syntax once MExpr more robust
-@testset "Expr Syntax" begin
-    @testset "type_match" begin
-        match_expr = :(::Type{Capture(:T)})  |> MExpr
-        @test_skip match_expr(:(::Type{Number}))[:T] == :Number
-        @test_skip match_expr(:(::Type{T <: Number}))[:T] == :(T <: Number)
-    end
-    # Remove block?
-    # http://mikeinnes.github.io/MacroTools.jl/stable/utilities/#MacroTools.unblock
-    # infix_match = :(Capture(:lexpr) = Capture(:rexpr)) |> MExpr
-end

@@ -1,6 +1,11 @@
 using ExprManipulation
 using Base.Meta: show_sexpr
 
+
+:([_, _]) |> show_sexpr
+
+:(Dict(_ => :hello)) |> show_sexpr
+
 input_expr = :(x |> f |> f(_, _))
 target_expr = :(x |> x->f(x) |> x->f(x, x))
 input_fn_expr = :(f(_, _))

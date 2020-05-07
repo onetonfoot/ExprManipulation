@@ -5,37 +5,36 @@ abstract type AbstractCapture end
 (==)(capture::AbstractCapture, expr) = capture.fn(expr)
 (==)(expr, capture::AbstractCapture) = capture.fn(expr)
 
-struct Capture{N} <: AbstractCapture
+# Takes a single arg and returns a boolean
+struct Capture{K} <: AbstractCapture
     fn::Function
-    val::Symbol
-    n::Int
+    key::Symbol
 
-    function Capture{N}(fn::Function, val::Symbol) where {N} 
-
-        if !(N isa Integer) || N < 1
-            throw(ArgumentError("Capture{N}(...) N must be a integer greater than 0 was given $N"))
-        end
-
+    function Capture(fn::Function, key::Symbol) 
         function inner_fn(expr)
             bool = fn(expr)
             @assert bool isa Bool "The precidate function should always return a Bool"
             bool
         end
-        new{N}(inner_fn, val, N)
+        new{key}(inner_fn, key)
     end
 end
 
-Capture(fn::Function, val::Symbol) = Capture{1}(fn, val)
-Capture(val::Symbol) = Capture{1}(x->true, val)
-Capture{N}(val::Symbol) where N = Capture{N}(x->true, val)
+Capture(key::Symbol) = Capture(x->true, key)
 
-Base.show(io::IO, capture::Capture{1})  = print(io, "Capture(:", capture.val, ")")
-Base.show(io::IO, capture::Capture{N}) where N = print(io, "Capture", "{", Int(N), "}", "(:", capture.val, ")")
-
-struct SplatCapture <: AbstractCapture
+# Takes array of args and returns a boolean
+struct Slurp{K} <: AbstractCapture
     fn::Function
-    val::Symbol
-    SplatCapture(fn::Function, val::Symbol) = new(fn, val)
+    key::Symbol
+
+    function Slurp(fn::Function, key::Symbol) 
+        function inner_fn(expr)
+            bool = fn(expr)
+            @assert bool isa Bool "The precidate function should always return a Bool"
+            bool
+        end
+        new{key}(inner_fn, key)
+    end
 end
 
-SplatCapture(val::Symbol) = SplatCapture(x->true, val)
+Slurp(key::Symbol) = Slurp(x->true, key)
