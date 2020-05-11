@@ -1,53 +1,107 @@
 # ExprManipulation
 
-ExprManipulation proves tools to match and transform expression.
+[![Build Status](https://travis-ci.com/onetonfoot/ExprManipulation.jl.svg?branch=master)](https://travis-ci.com/onetonfoot/ExprManipulation.jl)
+[![codecov](https://codecov.io/gh/onetonfoot/ExprManipulation.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/onetonfoot/ExprManipulation.jl)
 
-## Motivation
+ExprManipulation provides tools for manipulating expression based on the Expr syntax.
 
-Often expr manipulation code ends up hard to read and maintain
+# Intro
 
-with the pyramid of doom.
+There are 4 constructs to help `MExpr`, `Capture`, `Slurp` and `transform`, it's easier to illustarte with and example so.
 
-this package tries to provide a framework for expression manipulation that should result in easier to
-maintain code.
+```julia
+using Base.Meta: show_sexpr
+expr = :(x + 1)
+show_sexpr(expr)
+# (:call, :+, :x, 1)
+```
 
-- Robust - Each component of a MExpr's can be unit easily unit tested
-- Reusable - Capture and Transform can be reused in different MExpr's
-- Readablity - your MExprs should follow the s-expr syntax
+A MExpr can be used to test equality
 
-# Equality
+```julia
+m_expr = MExpr(:call, :+, Capture(:x), Capture(:n))
+m_expr == expr
+#true
+```
 
-MExpr can be used to test equality
+You can extract the the captured arguments with `match`, if the expressions aren't equal `match` will return nothing
 
-# Match
+```julia
+match(m_expr, expr)
+# Dict{Symbol,Any} with 2 entries:
+#   :n => 1
+#   :x => :x
+```
 
-You can extract the matches using `match`
+`Slurp` allows you to capture a variable number of arguments. It can be used anywhere in the expression but
+only a single `Slurp` per an `MExpr`.
 
-# Transform
+```julia
+m_expr = MExpr(:tuple, Capture(:first_number), Slurp(:args), Capture(:last_number))
+match(m_expr, :(1,2,3,4,5))
+# Dict{Symbol,Any} with 3 entries:
+#   :numbers      => Any[2, 3, 4]
+#   :first_number => 1
+#   :last_number  => 5
+```
 
-# Expresion Matching
+Both `Capture` and `Slurp` can take a function to test equality.
 
-## SCapture
+```julia
 
-Splat capure can only be used at the end of a expression.
+head = Capture(:head) do arg
+    arg in (:vect, :tuple)
+end
 
-<!-- Just like splat in Julia SplatCapture will always match. If no elements are present it will return a empty array -->
+slurp_numbers = Slurp(:numbers) do args::Array
+    all(map(x -> x <: Number, args))
+end
 
-# Expression Transformations
+vec_or_tuple = MExpr(head, numbers)
 
-Transformation can only be applied if the MExpr == Expr.
+match(vec_or_tuple, :((1,2,3)))
+# Dict{Symbol,Any} with 2 entries:
+#   :numbers => Any[1, 2, 3]
+#   :head    => :tuple
 
-## Transform
+match(vec_or_tuple, :([1,2,3]))
+# Dict{Symbol,Any} with 2 entries:
+#   :numbers => Any[1, 2, 3]
+#   :head    => :vect
 
-## STransform
+match(vec_or_tuple, :((1,"2",3)))
+# nothing
+```
+
+Transform can be used to create a new expression, it applies a function to each node in the Expr tree starting from the leaves. For example to replace the power call with plus.
+
+```julia
+input_expr = :( 2 + 2 ^ 5 * 2)
+match_power = MExpr(:call, :^, Slurp(:args))
+transform(input_expr) do node
+    matches = match(match_power, node)
+    !isnothing(matches) ?   Expr(:call, :+, matches[:args]...) : node
+end
+# :(2 + (2 + 5) * 2)
+
+```
+
+Or replace all the numbers with 1
+
+```julia
+transform(input_expr) do node
+    node isa Number ? 1 : node
+end
+# :(1 + (1 ^ 1) * 1)
+```
 
 # Examples
 
-For more in depth examples see the examples folder
+For more in-depth real examples see the examples folder.
 
 # Related Packages
 
-Other packages you may find usefull for handling Expr's
+Other packages you may find usefull for handling Exprs
 
 - ExprTools
 - MacroTools
