@@ -1,7 +1,7 @@
 # ExprManipulation
 
 [![Build Status](https://travis-ci.com/onetonfoot/ExprManipulation.jl.svg?branch=master)](https://travis-ci.com/onetonfoot/ExprManipulation.jl)
-[![codecov](https://codecov.io/gh/onetonfoot/ExprManipulation.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/onetonfoot/ExprManipulation.jl)
+[![Coverage Status](https://coveralls.io/repos/github/onetonfoot/ExprManipulation.jl/badge.svg?branch=master)](https://coveralls.io/github/onetonfoot/ExprManipulation.jl?branch=master)
 
 ExprManipulation provides tools for manipulating expression based on the Expr syntax.
 

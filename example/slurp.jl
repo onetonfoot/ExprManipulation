@@ -1,6 +1,9 @@
 using ExprManipulation
 using Base.Meta
 
+match_slurp = MExpr(:..., Capture(:var))
+match_assign = MExpr(:(=), MExpr(:tuple, Slurp(:lexprs)), Capture(:rexpr))
+
 function create_expr(lexprs, rexpr)
     idx = 1
     idx_exprs = []
@@ -37,8 +40,6 @@ function create_expr(lexprs, rexpr)
     expr
 end
 
-match_slurp = MExpr(:..., Capture(:var))
-match_assign = MExpr(:(=), MExpr(:tuple, Slurp(:lexprs)), Capture(:rexpr))
 
 macro slurp(expr)
     matches = match(match_assign, expr)
