@@ -5,38 +5,33 @@ match_slurp = MExpr(:..., Capture(:var))
 match_assign = MExpr(:(=), MExpr(:tuple, Slurp(:lexprs)), Capture(:rexpr))
 
 function create_expr(lexprs, rexpr)
-    idx = 1
-    idx_exprs = []
-    varnames = []
+    i = 1
     n = length(lexprs)
     x = gensym()
-    
-    for arg in lexprs
-        if match_slurp == arg
-            j = (n - idx)
-            push!(idx_exprs, :($x[$idx:end - $j]))
-            idx = -j
-            push!(varnames, match(match_slurp, arg)[:var])
-        else
-            if idx < 0
-                push!(idx_exprs, :($x[end $idx]))
-            elseif idx == 0
-                push!(idx_exprs, :($x[end]))
-            else
-                push!(idx_exprs, :($x[$idx]))
-            end
-            push!(varnames, arg)
-        end
-        idx += 1
-    end
 
     expr = Expr(:block)
     push!(expr.args, Expr(:(=), x, rexpr))
-
-    for (var, idx) in zip(varnames, idx_exprs)
-        push!(expr.args, Expr(:(=), var, idx))
+    
+    for var in lexprs
+        if match_slurp == var
+            j = (n - i)
+            idx =  :($x[$i:end - $j])
+            var = match(match_slurp, var)[:var]
+            push!(expr.args, Expr(:(=), var, idx))
+            i = -j
+        elseif var isa Symbol
+            if i < 0
+                push!(expr.args, Expr(:(=), var, :($x[end $i])))
+            elseif i == 0
+                push!(expr.args, Expr(:(=), var, :($x[end])))
+            else
+                push!(expr.args, Expr(:(=), var, :($x[$i])))
+            end
+        else
+            error("Unsupported expr on left hand side $var")
+        end
+        i += 1
     end
-
     expr
 end
 
@@ -50,9 +45,11 @@ macro slurp(expr)
 end
 
 expr = :((a, b..., c) = [1,2,3,4])
-
 matches = match(match_assign, expr)
-create_expr(matches[:lexprs], matches[:rexpr]) 
+
+lexprs, rexpr =   matches[:lexprs], matches[:rexpr]
+
+@show matches
 
 @slurp a, b..., c = [1,2,3,4,5]
 @show a b c
