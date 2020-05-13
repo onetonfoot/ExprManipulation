@@ -28,9 +28,7 @@ You can extract the the captured arguments with `match`, if the expressions aren
 
 ```julia
 match(m_expr, expr)
-# Dict{Symbol,Any} with 2 entries:
-#   :n => 1
-#   :x => :x
+#(x = :x, n = 1)
 ```
 
 `Slurp` allows you to capture a variable number of arguments. It can be used anywhere in the expression but
@@ -39,35 +37,24 @@ only a single `Slurp` per an `MExpr`.
 ```julia
 m_expr = MExpr(:tuple, Capture(:first_number), Slurp(:args), Capture(:last_number))
 match(m_expr, :(1,2,3,4,5))
-# Dict{Symbol,Any} with 3 entries:
-#   :numbers      => Any[2, 3, 4]
-#   :first_number => 1
-#   :last_number  => 5
+# (first_number = 1, args = Any[2, 3, 4], last_number = 5)
 ```
 
 Both `Capture` and `Slurp` can take a function to test equality.
 
 ```julia
-
 head = Capture(:head) do arg
     arg in (:vect, :tuple)
 end
 
 slurp_numbers = Slurp(:numbers) do args::Array
-    all(map(x -> x <: Number, args))
+    all(map(x -> x isa Number, args))
 end
 
-vec_or_tuple = MExpr(head, numbers)
+vec_or_tuple = MExpr(head, slurp_numbers)
 
 match(vec_or_tuple, :((1,2,3)))
-# Dict{Symbol,Any} with 2 entries:
-#   :numbers => Any[1, 2, 3]
-#   :head    => :tuple
-
-match(vec_or_tuple, :([1,2,3]))
-# Dict{Symbol,Any} with 2 entries:
-#   :numbers => Any[1, 2, 3]
-#   :head    => :vect
+# (head = :tuple, numbers = Any[1, 2, 3])
 
 match(vec_or_tuple, :((1,"2",3)))
 # nothing

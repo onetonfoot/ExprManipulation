@@ -41,6 +41,44 @@ function getcaptures(m_expr, expr)
     m_children = []
     e_children = []
 
+    i = 1
+    n = length(expr.args)
+
+
+    # for m_arg in m_expr.args
+    #     if m_arg isa Slurp
+    #         has_slurp = true
+    #         j = m_expr
+    #         args = expr.args[i:j]
+    #         bool = m_arg.fn(args[i:n])
+    #         bool && push!(matches, m_arg.key => args)
+    #         matched[(i+1):(j+1)] .= bool
+    #         i = j
+    #     else
+    #         arg = expr.args[i]
+    #         bool = if m_arg isa Capture
+    #             bool = m_arg == arg
+    #             bool && push!(matches, m_arg.key => arg)
+    #             bool
+    #         elseif m_arg isa MExpr
+    #             if arg isa Expr
+    #                 true
+    #                 push!(m_children, m_arg)
+    #                 push!(e_children, arg)
+    #             else
+    #                 false
+    #             end
+    #         else
+    #             true
+    #         end
+    #         matched[i+1] = bool
+    #     end
+    #     i += 1
+    #     if i > length(expr.args) || i > length(m_expr.args)
+    #         break
+    #     end
+    # end
+
     # TODO clean up
     while length(expr.args) >= e_i && length(m_expr.args) >= m_i
         arg = expr.args[e_i]
@@ -86,6 +124,7 @@ function getcaptures(m_expr, expr)
         end
     end
 
+
     all_matched = all(matched)
     # TO FEW CAPTURES
     if length(m_expr.args) < length(expr.args) && !has_slurp 
@@ -116,7 +155,7 @@ function Base.match(m_expr::MExpr, expr::Expr)
             push!(que,  (m_child, child))
         end
     end
-    return Dict(values...)
+    (;values...)
 end
 
 
