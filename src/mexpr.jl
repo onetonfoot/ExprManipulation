@@ -33,7 +33,6 @@ function getcaptures(m_expr, expr)
     matched = fill(false, length(expr.args) + 1)
     matched[1]  = m_expr.head == expr.head
 
-
     e_i = 1
     m_i = 1
     has_slurp = false
@@ -41,45 +40,6 @@ function getcaptures(m_expr, expr)
     m_children = []
     e_children = []
 
-    i = 1
-    n = length(expr.args)
-
-
-    # for m_arg in m_expr.args
-    #     if m_arg isa Slurp
-    #         has_slurp = true
-    #         j = m_expr
-    #         args = expr.args[i:j]
-    #         bool = m_arg.fn(args[i:n])
-    #         bool && push!(matches, m_arg.key => args)
-    #         matched[(i+1):(j+1)] .= bool
-    #         i = j
-    #     else
-    #         arg = expr.args[i]
-    #         bool = if m_arg isa Capture
-    #             bool = m_arg == arg
-    #             bool && push!(matches, m_arg.key => arg)
-    #             bool
-    #         elseif m_arg isa MExpr
-    #             if arg isa Expr
-    #                 true
-    #                 push!(m_children, m_arg)
-    #                 push!(e_children, arg)
-    #             else
-    #                 false
-    #             end
-    #         else
-    #             true
-    #         end
-    #         matched[i+1] = bool
-    #     end
-    #     i += 1
-    #     if i > length(expr.args) || i > length(m_expr.args)
-    #         break
-    #     end
-    # end
-
-    # TODO clean up
     while length(expr.args) >= e_i && length(m_expr.args) >= m_i
         arg = expr.args[e_i]
         m_arg = m_expr.args[m_i]
@@ -96,16 +56,13 @@ function getcaptures(m_expr, expr)
             if bool
                 push!(matches, m_arg.key => args)
             end
-            e_i += length(e_i:j)
-            m_i += 1
+            e_i += length(e_i:j) - 1
         elseif m_arg isa Capture
             bool = m_arg == arg
             matched[e_i + 1] = bool
             if bool
                 push!(matches, m_arg.key => arg)
             end
-            e_i += 1
-            m_i += 1
         elseif m_arg isa MExpr
             bool = if arg isa Expr
                 push!(m_children, m_arg)
@@ -115,15 +72,12 @@ function getcaptures(m_expr, expr)
                 false
             end
             matched[e_i + 1] = bool
-            e_i += 1
-            m_i += 1
         else
             matched[e_i + 1] = arg == m_arg
-            e_i += 1
-            m_i += 1
         end
+        e_i += 1
+        m_i += 1
     end
-
 
     all_matched = all(matched)
     # TO FEW CAPTURES
