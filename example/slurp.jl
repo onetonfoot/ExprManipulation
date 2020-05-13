@@ -3,7 +3,7 @@ using ExprManipulation
 match_slurp = MExpr(:..., Capture(:var))
 match_assign = MExpr(:(=), MExpr(:tuple, Slurp(:lexprs)), Capture(:rexpr))
 
-function create_expr(lexprs, rexpr)
+function slurp(lexprs, rexpr)
     i = 1
     n = length(lexprs)
     x = gensym()
@@ -39,7 +39,7 @@ macro slurp(expr)
     if isnothing(matches)
         error("Unsupported expression $expr")
     end
-    esc(create_expr(matches[:lexprs], matches[:rexpr]))
+    esc(slurp(matches[:lexprs], matches[:rexpr]))
 end
 
 @slurp a, b..., c = [1,2,3,4,5]
