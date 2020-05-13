@@ -1,59 +1,10 @@
-using ExprManipulation: MExpr, Capture, Slurp, getcaptures
-using Test
-using Base.Meta: show_sexpr
-
 @testset "Constructor" begin
     @test_nowarn MExpr(:call)
     @test_nowarn MExpr(:call, Capture(:x))
     @test_throws ArgumentError MExpr(:call, Slurp(:x), Slurp(:y))
 end
 
-@testset "getcaptures" begin
-    # NORMAL ARGS
-    expr = :([1,2,3,4])
-    m_expr = MExpr(:vect, 1, 2, 3, 4)
-    (matches, children, all_matched) = getcaptures(m_expr, expr)
-    @test all_matched
-
-    # TOO MANY CAPUTES
-    expr = :([1])
-    m_expr = MExpr(:vect, Capture(:x), Capture(:y))
-    (matches, children, all_matched) = getcaptures(m_expr, expr)
-    @test !all_matched
-
-    # TOO FEW CAPUTES
-    expr = :([1,2,3])
-    m_expr = MExpr(:vect, Capture(:x), Capture(:y))
-    (matches, children, all_matched) = getcaptures(m_expr, expr)
-    @test !all_matched
-
-    # SLURP START
-    expr = :([1,2,3,4])
-    m_expr = MExpr(:vect, Slurp(:elements))
-    (matches, children, all_matched) = getcaptures(m_expr, expr)
-    @test all_matched
-
-    # SLURP END
-    expr = :([1,2,3,4])
-    m_expr = MExpr(:vect, Capture(:x), Slurp(:elements))
-    (matches, children, all_matched) = getcaptures(m_expr, expr)
-    @test all_matched 
-
-    # SLURP MIDDLE
-    expr = :([1,2,3,4])
-    m_expr = MExpr(:vect, Capture(:x), Slurp(:elements), Capture(:y))
-    (matched, children, all_matched) = getcaptures(m_expr, expr)
-    @test all_matched
-
-    # NESTED
-    expr = :((x + 1)^2)
-    m_expr = MExpr(:call, :^, MExpr(:call, :+, Slurp(:args)), Capture(:power_n))
-    (matched, (m_children, e_children), all_matched) =  getcaptures(m_expr, expr)
-    @test length(m_children) == length(e_children)
-
-end
-
-@testset "Match" begin
+@testset "match" begin
     @testset "infix_match" begin
         infix_match = MExpr(:call, Capture(:op), Capture(:lexpr), Capture(:rexpr))
         expr1 = :(x + 10) 

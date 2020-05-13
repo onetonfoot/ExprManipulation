@@ -50,7 +50,7 @@ function getcaptures(m_expr, expr)
             n_ele = length(expr.args[e_i:end])
             # Get Slurp Index
             j = e_i + n_ele - n - 1
-            args = expr.args[e_i:j]
+            args = [expr.args[e_i:j]...]
             bool = m_arg.fn(args)
             matched[(e_i + 1):(j + 1)] .= bool
             if bool

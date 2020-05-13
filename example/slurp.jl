@@ -35,7 +35,6 @@ function create_expr(lexprs, rexpr)
     expr
 end
 
-
 macro slurp(expr)
     matches = match(match_assign, expr)
     if isnothing(matches)
@@ -44,15 +43,10 @@ macro slurp(expr)
     esc(create_expr(matches[:lexprs], matches[:rexpr]))
 end
 
-expr = :((a, b..., c) = [1,2,3,4])
-matches = match(match_assign, expr)
-
-lexprs, rexpr =   matches[:lexprs], matches[:rexpr]
-
-@show matches
-
 @slurp a, b..., c = [1,2,3,4,5]
 @show a b c
 
 @slurp a, b... = [1,2,3,4,5]
 @show a b
+
+@macroexpand @slurp a, b..., c = [1,2,3,4,5]

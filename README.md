@@ -9,6 +9,9 @@ ExprManipulation provides tools for manipulating expression based on the Expr sy
 
 There are 4 constructs to help `MExpr`, `Capture`, `Slurp` and `transform`, it's easier to illustarte with and example so.
 
+
+## Equality
+
 ```julia
 using Base.Meta: show_sexpr
 expr = :(x + 1)
@@ -23,6 +26,8 @@ m_expr = MExpr(:call, :+, Capture(:x), Capture(:n))
 m_expr == expr
 #true
 ```
+
+## Match
 
 You can extract the the captured arguments with `match`, if the expressions aren't equal `match` will return nothing
 
@@ -54,11 +59,13 @@ end
 vec_or_tuple = MExpr(head, slurp_numbers)
 
 match(vec_or_tuple, :((1,2,3)))
-# (head = :tuple, numbers = Any[1, 2, 3])
+# (head = :tuple, numbers = [1, 2, 3])
 
 match(vec_or_tuple, :((1,"2",3)))
 # nothing
 ```
+
+## Transform
 
 Transform can be used to create a new expression, it applies a function to each node in the Expr tree starting from the leaves. For example to replace the power call with plus.
 
