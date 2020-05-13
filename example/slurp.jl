@@ -1,5 +1,4 @@
 using ExprManipulation
-using Base.Meta
 
 match_slurp = MExpr(:..., Capture(:var))
 match_assign = MExpr(:(=), MExpr(:tuple, Slurp(:lexprs)), Capture(:rexpr))
