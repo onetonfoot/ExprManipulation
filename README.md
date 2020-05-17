@@ -67,7 +67,7 @@ match(vec_or_tuple, :((1,"2",3)))
 
 ## Transform
 
-Transform can be used to create a new expression, it applies a function to each node in the Expr tree starting from the leaves. For example to replace the power call with plus.
+Transform can be used to create a new expression, it applies a function to each node in the Expr tree starting from the leaves. For example to replace all the numbers with 1.
 
 ```julia
 transform(input_expr) do node
