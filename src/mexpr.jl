@@ -43,6 +43,7 @@ function getcaptures(m_expr, expr)
     while length(expr.args) >= e_i && length(m_expr.args) >= m_i
         arg = expr.args[e_i]
         m_arg = m_expr.args[m_i]
+
         if m_arg isa Slurp
             has_slurp = true
             # Find number of captures left
@@ -53,14 +54,14 @@ function getcaptures(m_expr, expr)
             args = [expr.args[e_i:j]...]
             bool = m_arg.fn(args)
             matched[(e_i + 1):(j + 1)] .= bool
-            if bool
+            if bool 
                 push!(matches, m_arg.key => args)
             end
             e_i += length(e_i:j) - 1
         elseif m_arg isa Capture
             bool = m_arg == arg
             matched[e_i + 1] = bool
-            if bool
+            if bool 
                 push!(matches, m_arg.key => arg)
             end
         elseif m_arg isa MExpr
@@ -112,10 +113,21 @@ function Base.match(m_expr::MExpr, expr::Expr)
     (;values...)
 end
 
-
-Base.match(m_expr::MExpr, x) = nothing
+Base.match(::MExpr, ::Any) = nothing
 
 (==)(m_expr::MExpr, expr::Expr) = !isnothing(match(m_expr, expr))
 (==)(expr::Expr, m_expr::MExpr) = m_expr == expr
 
-# TODO define nice show methods
+function Base.show(io::IO, expr::MExpr) 
+    if expr.head isa Symbol
+        print(io, "(:", expr.head)
+    else
+        print(io, "(", expr.head)
+    end
+
+    for arg in expr.args
+        print(io, ", ")
+        print(io, arg)
+    end
+    print(io, ")")
+end

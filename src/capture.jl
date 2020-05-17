@@ -42,8 +42,8 @@ end
 
 Slurp(key::Symbol) = Slurp(x->true, key)
 
-Base.show(io::IO, capture::Capture) =  print("Capture(:", capture.key, ")")
-Base.show(io::IO, capture::Slurp) =  print("Slurp(:", capture.key, ")")
+Base.show(io::IO, capture::Capture) =  write(io,"Capture(:", capture.key, ")")
+Base.show(io::IO, capture::Slurp) =  write(io, "Slurp(:", capture.key, ")")
 
 (==)(capture::AbstractCapture, expr) = capture.fn(expr)
 (==)(expr, capture::AbstractCapture) = capture.fn(expr)
