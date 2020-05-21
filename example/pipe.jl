@@ -36,7 +36,7 @@ function pipe(expr)
 end
 
 macro pipe(expr)
-    pipe(expr)
+    esc(pipe(expr))
 end
 
 @testset "Pipe" begin
